@@ -535,8 +535,8 @@ def build_report(repo: str, workflow: str, failures: list[Failure],
     total = len(failures)
     infra_like = sum(
         cats[c]
-        for c in ("infra_runner", "network_timeout", "registry_pull",
-                  "dependency_install", "timing_race")
+        for c in ("infra_runner", "github_infra", "network_timeout",
+                  "registry_pull", "dependency_install", "timing_race")
     )
 
     L = []

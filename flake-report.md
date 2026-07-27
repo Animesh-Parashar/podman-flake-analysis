@@ -15,7 +15,7 @@ Sample: **95 failed jobs** across 25 failed workflow runs.
 | `network_timeout` | 2 | 2.1% | Network unreachable, DNS failure, or transport timeout |
 | `github_infra` | 1 | 1.1% | GitHub's own infrastructure throttled or failed the job |
 
-**Environment-caused (infra/network/registry/dependency/timing): 15/95 = 15.8%**. These are flakes rather than defects, and are the addressable target.
+**Environment-caused (infra/network/registry/dependency/timing): 16/95 = 16.8%**. These are flakes rather than defects, and are the addressable target.
 
 ## Failures on `main`
 

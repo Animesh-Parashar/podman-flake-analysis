@@ -106,7 +106,7 @@ with output reviewed and folded back into the taxonomy.
 | `network_timeout` | 2.1% |
 | `github_infra` | 1.1% |
 
-Environment-caused (network, infra, timing): **15.8%**.
+Environment-caused (network, infra, timing): **16.8%**.
 
 Two specifics:
 
