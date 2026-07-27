@@ -22,7 +22,7 @@ Standard library only, no third-party dependencies.
 | `--limit` | 60 | failed runs to ingest |
 | `--exclude-jobs` | `^(Total Success\|...)$` | aggregator/gate jobs to drop |
 | `--out` | `flake-report.md` | markdown report |
-| `--json-out` | none | per-failure records for further analysis |
+| `--json-out` | none | `{failures: [...], rerun_confirmed: [...]}` for further analysis |
 
 Logs are cached under `.cache/` (gitignored). Podman job logs run to roughly
 22 MB each, so a 25-run sample is about 750 MB on disk. The cache makes reruns
@@ -128,6 +128,12 @@ Two specifics:
   `Validate source code changes`. Reruns are the only zero-heuristic flake
   signal available and they are rare, which limits how far this cross-check
   can be pushed.
+- A rerun-confirmed job passed on its run's latest attempt, so it is not a
+  failure of that run and normally has no record in the failure set. The seed
+  set is the `rerun_confirmed` list, not the `rerun_passed` column, which is
+  empty in this sample by construction. Matching those confirmations back onto
+  failures by job name rather than by `(run_id, job_name)` silently marks
+  unrelated runs, since job names repeat across every run.
 - `timing_race` is ordered before `test_assertion`, so a Ginkgo test failing on
   a timeout classifies as timing rather than assertion. That is a deliberate
   choice for flake-hunting and not obviously the right default for other uses.

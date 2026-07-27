@@ -497,9 +497,12 @@ def detect_reruns(gh: GitHub, repo: str, failures: list[Failure]) -> list[tuple[
                     if (run_id, name) not in confirmed:
                         confirmed.append((run_id, name))
 
-    marked = {name for _, name in confirmed}
+    # Scope by (run_id, job_name). Matching on job_name alone marks every run
+    # that happens to share the name: job names repeat across every run, so a
+    # single confirmation would flag unrelated failures as ground truth.
+    marked = set(confirmed)
     for f in failures:
-        if f.job_name in marked:
+        if (f.run_id, f.job_name) in marked:
             f.rerun_passed = True
     return confirmed
 
@@ -585,6 +588,12 @@ def build_report(repo: str, workflow: str, failures: list[Failure],
         A("|---|---|")
         for rid, name in confirmed:
             A(f"| [{rid}](https://github.com/{repo}/actions/runs/{rid}) | `{name}` |")
+        A("")
+        in_set = sum(1 for f in failures if f.rerun_passed)
+        A(f"{in_set} of these carry a failure record in the sample below. A job "
+          "confirmed here passed on the run's latest attempt, so it is not a "
+          "failure of that run and usually has no record: the pairs above are "
+          "the seed set, not the `rerun_passed` column.")
     else:
         A("None in this sample. Reruns are the only zero-heuristic flake signal "
           "available, and they are rare, which is a limitation of this approach.")
@@ -664,10 +673,13 @@ def main() -> int:
     if args.json_out:
         Path(args.json_out).write_text(
             json.dumps(
-                [
-                    {k: v for k, v in f.__dict__.items()}
-                    for f in failures
-                ],
+                {
+                    "failures": [dict(f.__dict__) for f in failures],
+                    "rerun_confirmed": [
+                        {"run_id": rid, "job_name": name}
+                        for rid, name in confirmed
+                    ],
+                },
                 indent=2,
             ),
             encoding="utf-8",

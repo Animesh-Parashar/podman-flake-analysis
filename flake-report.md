@@ -68,6 +68,8 @@ Sample: **95 failed jobs** across 25 failed workflow runs.
 | [30076927369](https://github.com/podman-container-tools/podman/actions/runs/30076927369) | `Validate source code changes` |
 | [30004632979](https://github.com/podman-container-tools/podman/actions/runs/30004632979) | `Validate source code changes` |
 
+0 of these carry a failure record in the sample below. A job confirmed here passed on the run's latest attempt, so it is not a failure of that run and usually has no record: the pairs above are the seed set, not the `rerun_passed` column.
+
 ## Unclassified
 
 5 job(s) matched no rule. In the full system these are the queue an LLM stage should triage, with its output reviewed and folded back into the taxonomy.
