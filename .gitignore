@@ -1,0 +1,4 @@
+.cache/
+failures.json
+*.pyc
+__pycache__/
