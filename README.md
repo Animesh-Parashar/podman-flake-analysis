@@ -142,5 +142,31 @@ Two specifics:
 - Windows job logs contain wide-character spacing (`F o r  m o r e`) that
   defeats naive matching. Not yet normalized.
 - The taxonomy was developed against this sample, so the 5.3% unclassified
-  figure is measured on the data it was fitted to and will be optimistic on
-  unseen runs.
+  figure is measured on the data it was fitted to.
+
+## Out-of-sample check
+
+The unmodified analyzer was pointed at `kyverno/kyverno`
+(`check-unit-tests.yaml`, 25 failed jobs), a Go repository with a different
+test harness, as a holdout for the caveat above.
+
+| | Podman (fitted) | Kyverno (holdout) |
+|---|---:|---:|
+| `unclassified` | 5.3% | 4.0% |
+| environment-caused | 16.8% | 0.0% |
+
+All 25 evidence strings were read rather than trusted, since `build_artifact`
+landed at 44% and that is the category the `make:` bug once inflated to 70.5%.
+The labels were correct: Go compile errors against `--- FAIL:` assertions.
+
+The honest reading is narrower than 4.0% suggests. Kyverno unit-test failures
+come in two well-formed shapes with unambiguous markers, while the Podman
+sample spans BATS/TAP, Ginkgo, PowerShell, installers, 504s and size gates.
+This shows the taxonomy generalizes to structured Go tooling output, the easy
+case, not that it generalizes broadly. The 25 jobs also collapse to roughly 8
+distinct root causes, since the same broken commit was retried across runs.
+
+Zero environment-caused failures appeared, so that workflow is the wrong place
+to hunt flakes. Kyverno's conformance suite is a reusable workflow invoked via
+`workflow_call`, so it reports no runs of its own and its jobs are attributed
+to the caller.
