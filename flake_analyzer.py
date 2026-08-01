@@ -223,6 +223,49 @@ SALIENT = re.compile(
 )
 SALIENT_CAP = 40
 
+# Lines that identify *which* test failed, as opposed to reporting that one did.
+#
+# Measured over 126 failed jobs: 37.3% of evidence strings were empty or a bare
+# marker, and `[FAILED] Expected` alone accounted for 17.5% of all failures,
+# because Ginkgo prints that marker at the failure point and the spec name
+# several lines away in its `Summarizing N Failures:` block. Classification
+# picks a category from the marker; evidence needs the name. These are searched
+# separately, most specific first.
+IDENTIFYING = [
+    # Ginkgo: `[FAIL] <suite> [It] <spec name>`
+    re.compile(r"^\s*\[FAIL\]\s+(\S.*?\[(?:It|DeferCleanup|BeforeEach|AfterEach|"
+               r"BeforeAll|AfterAll|JustBeforeEach)[^\]]*\].*\S)\s*$", re.MULTILINE),
+    # go test
+    re.compile(r"^\s*--- FAIL:\s+(\S+)", re.MULTILINE),
+    # TAP / BATS
+    re.compile(r"^not ok \d+\s+(\S.*\S)\s*$", re.MULTILINE),
+]
+
+# Source locations, used to disambiguate two specs with the same name.
+LOCATION = re.compile(
+    r"^\s*((?:[A-Za-z]:)?[\w./\\+-]+\.(?:go|bats|bash|sh):\d+)", re.MULTILINE
+)
+
+IDENT_CAP = 3
+
+
+def extract_test_ids(region: str) -> list[str]:
+    """Return the names of the specific tests that failed, most specific first.
+
+    Deduplicated, order preserved. Empty when the log names no test, which is
+    itself a useful signal: it means the failure is not a test failure.
+    """
+    out: list[str] = []
+    for pat in IDENTIFYING:
+        for m in pat.finditer(region):
+            name = " ".join(m.group(1).split())
+            if name and name not in out:
+                out.append(name)
+        if out:
+            break
+    return out[:IDENT_CAP]
+
+
 COMPILED = [
     (name, desc, [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in pats])
     for name, desc, pats in TAXONOMY
@@ -377,8 +420,17 @@ def extract_failure_region(
     return "\n".join(parts)[-max_chars:]
 
 
-def classify(region: str) -> tuple[str, str]:
-    """Return (category, the line that triggered the match)."""
+def classify(region: str) -> tuple[str, str, list[str]]:
+    """Return (category, evidence, test_ids).
+
+    Category comes from the first taxonomy rule that matches. Evidence is the
+    line that triggered it, but a triggering line is often a bare marker: the
+    `[FAILED]` rule fires on Ginkgo's `[FAILED] Expected`, which names no test.
+    Where the log identifies the failing test, that name leads the evidence, so
+    two different failures no longer collapse to the same string.
+    """
+    test_ids = extract_test_ids(region)
+
     for name, _desc, pats in COMPILED:
         for pat in pats:
             m = pat.search(region)
@@ -393,8 +445,15 @@ def classify(region: str) -> tuple[str, str]:
                 ),
                 m.group(0),
             )
-            return name, " ".join(line.split())[:300]
-    return "unclassified", ""
+            detail = " ".join(line.split())
+            if test_ids:
+                lead = "; ".join(test_ids)
+                # Do not repeat the name when the triggering line already is it.
+                evidence = detail if detail.endswith(test_ids[0]) else f"{lead} | {detail}"
+            else:
+                evidence = detail
+            return name, evidence[:300], test_ids
+    return "unclassified", ("; ".join(test_ids))[:300], test_ids
 
 
 
@@ -413,6 +472,7 @@ class Failure:
     url: str
     category: str = "unclassified"
     evidence: str = ""
+    test_ids: list[str] = field(default_factory=list)
     rerun_passed: bool | None = None  # True = confirmed flake
 
     @property
@@ -514,7 +574,7 @@ def enrich(gh: GitHub, repo: str, failures: list[Failure], workers: int) -> None
             f.category = "log_unavailable"
             return
         region = extract_failure_region(log)
-        f.category, f.evidence = classify(region)
+        f.category, f.evidence, f.test_ids = classify(region)
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
         list(ex.map(work, failures))

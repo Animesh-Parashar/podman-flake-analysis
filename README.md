@@ -170,3 +170,59 @@ Zero environment-caused failures appeared, so that workflow is the wrong place
 to hunt flakes. Kyverno's conformance suite is a reusable workflow invoked via
 `workflow_call`, so it reports no runs of its own and its jobs are attributed
 to the caller.
+
+## Evidence capture: a defect found by trying to use the tool
+
+Podman maintainers label known-flaky issues with `flakes`; 42 are open. Trying
+to match live CI failures against that corpus exposed a defect in this tool
+rather than a fact about the corpus.
+
+The `evidence` field was anchored on the line that triggered the taxonomy
+match. For Ginkgo that is the bare marker, because `test_assertion`'s first
+pattern is `\[FAILED\]` and Ginkgo prints `[FAILED] Expected` at the failure
+point with the spec name several lines away in its `Summarizing N Failures:`
+block. Measured over 126 failed jobs from 40 runs of `ci.yml`:
+
+The metric is stated over the **114 jobs where a taxonomy rule matched**. The
+other 12 are `unclassified` or `log_unavailable`: no rule matched, or the log
+was purged by retention, so there is no triggering line to quote and no test
+name to find. Those cannot carry evidence by construction and counting them
+would flatter the result.
+
+| Over 114 classified jobs | Before | After |
+|---|---:|---:|
+| Evidence that is empty or a bare marker | 35 (30.7%) | **0 (0.0%)** |
+| Jobs carrying a test name | 0 | **91 (79.8%)** |
+| `[FAILED] Expected` occurrences | 22 | **0** |
+| Distinct evidence strings (all 126 jobs) | 69 | **90** |
+
+This is the same root cause as the TAP-distance finding above, which had been
+applied to classification and never to evidence capture. The extraction window
+already contained the spec name; `classify()` discarded it.
+
+The fix adds an `IDENTIFYING` pass that pulls test names from Ginkgo
+(`[FAIL] <suite> [It] <spec>`), `go test` (`--- FAIL: TestName`) and TAP/BATS
+(`not ok N <name>`), exposed as a `test_ids` field. Category selection is
+untouched, and **category assignment is identical for all 126 jobs**, verified
+by diffing before and after.
+
+Verified cold, with the log cache removed: 0 hits / 37 fetches, 22 jobs, zero
+bare markers, and 0 of 10 classified jobs uninformative. The warm-cache and
+cold-cache results agree.
+
+### What this did and did not buy
+
+Re-running the known-flake match with the improved evidence moved it from
+1/126 to 3/126. Inspecting all three: two are a correct exact match on
+[#28868](https://github.com/podman-container-tools/podman/issues/28868), and
+one is a false positive matching `error: 404` against `error: 504`, because
+token-overlap matching discards the numeric literal that carries the meaning.
+
+So the true match rate is 2/126. On this sample the labelled flake corpus is
+largely stale relative to current CI, and a known-flake dictionary is not a
+useful triage filter. Held weakly: only 22 of the 42 issues yielded a signature
+with enough distinctive tokens to match on at all.
+
+The change is still worth having. Per-test aggregation was impossible while
+every Ginkgo failure shared one evidence string, and it is the obvious next
+output.
