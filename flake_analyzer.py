@@ -275,10 +275,7 @@ ERROR_MARKER = re.compile(r"##\[error\]")
 TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?")
 
 
-# --------------------------------------------------------------------------
 # GitHub API client
-# --------------------------------------------------------------------------
-
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Surface redirects as HTTPError so the caller can re-issue them unauthed."""
